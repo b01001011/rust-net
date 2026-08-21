@@ -1,0 +1,12 @@
+[package]
+name = "examples"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+rust-net = { path = "../crates/rust-net" }
+
+[[example]]
+name = "echo-tcp"
+path = "echo-tcp.rs"

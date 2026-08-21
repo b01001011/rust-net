@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/rust-net",
+    "examples",
+]
+
+resolver = "3"

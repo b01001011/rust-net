@@ -1,8 +1,16 @@
 use std::io::{self, Read, Write};
-use std::net::TcpStream as StdTcpStream;
+use super::socket::TcpSocket;
 
 pub struct TcpStream {
-    pub(crate) inner: StdTcpStream,
+    inner: TcpSocket,
+}
+
+impl TcpStream {
+    pub(crate) fn new(socket: TcpSocket) -> Self {
+        Self {
+            inner: socket,
+        }
+    }
 }
 
 impl Read for TcpStream {

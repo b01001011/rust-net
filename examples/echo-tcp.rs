@@ -1,8 +1,10 @@
 use rust_net::net::{TcpListener, TcpStream};
 use std::io::{Read, Write};
+use std::net::SocketAddr;
 
 fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8080")?;
+    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    let listener = TcpListener::bind(addr)?;
 
     println!("Listening on: 127.0.0.1:8080");
 

@@ -1,0 +1,12 @@
+[package]
+name = "examples"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[[example]]
+name = "stun"
+path = "stun.rs"
+
+[dependencies]
+tokio = { version = "1.53.1", features = ["full"] }

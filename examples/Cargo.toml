@@ -5,12 +5,16 @@ publish = false
 edition = "2024"
 
 [[example]]
-name = "stun"
-path = "stun.rs"
+name = "peer"
+path = "peer.rs"
 
 [[example]]
 name = "rendezvous"
 path = "rendezvous.rs"
+
+[[example]]
+name = "stun"
+path = "stun.rs"
 
 [dependencies]
 prost = "0.14.4"

@@ -8,5 +8,15 @@ edition = "2024"
 name = "stun"
 path = "stun.rs"
 
+[[example]]
+name = "rendezvous"
+path = "rendezvous.rs"
+
 [dependencies]
+prost = "0.14.4"
 tokio = { version = "1.53.1", features = ["full"] }
+tonic = "0.14.6"
+tonic-prost = "0.14.6"
+
+[build-dependencies]
+tonic-prost-build = "0.14.6"

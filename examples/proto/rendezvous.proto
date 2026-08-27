@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package rendezvous;
+
+service Rendezvous {
+    rpc Register(RegisterRequest) returns (RegisterResponse);
+}
+
+message RegisterRequest {
+    string peer_id = 1;
+}
+
+message RegisterResponse {
+    string message = 1;
+}

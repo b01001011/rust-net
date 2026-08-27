@@ -2,6 +2,11 @@
 
 A collection of network programming examples written in Rust.
 
+## Prerequisites
+```bash
+brew install protobuf
+```
+
 ## Examples
 
 The repository contains several network programming examples.

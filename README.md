@@ -1,6 +1,6 @@
-# rust-network-examples
+# rust-net
 
-A collection of network programming examples written in Rust.
+A network library written in Rust.
 
 ## Prerequisites
 ```bash

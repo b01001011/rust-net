@@ -1,5 +1,6 @@
 [workspace]
-members = [
+members = ["crates/rust-net",
+    "crates/rust-net",
     "examples",
 ]
 

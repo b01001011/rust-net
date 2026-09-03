@@ -1,3 +1,5 @@
+pub mod rendezvous;
 pub mod stun;
 
-pub use stun::discovery::discover_public_address;
+// pub use rendezvous::server::RendezvousServer;
+// pub use stun::discovery::discover_public_address;

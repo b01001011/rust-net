@@ -3,7 +3,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
-use tokio::time::{timeout, error::Elapsed};
+use tokio::time::timeout;
 
 const DEFAULT_STUN_SERVER: &str = "stun.l.google.com:19302";
 

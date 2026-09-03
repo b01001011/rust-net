@@ -1,13 +1,5 @@
 use std::env;
-
-use tonic::transport::Channel;
-
-pub mod rendezvous {
-    tonic::include_proto!("rendezvous");
-}
-
-use rendezvous::rendezvous_client::RendezvousClient;
-use rendezvous::RegisterRequest;
+use rust_net::rendezvous::RendezvousClient;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,17 +13,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Connecting to rendezvous server at {server}");
 
-    let mut client = RendezvousClient::connect(server.to_string()).await?;
+    let mut client = RendezvousClient::connect(server).await?;
 
     println!("Connected!");
 
-    let request = RegisterRequest {
-        peer_id: peer_id.clone(),
-    };
+    let response = client.register(&peer_id).await?;
 
-    let response = client.register(request).await?;
-
-    println!("Server response: {}", response.into_inner().message);
+    println!("Server response: {}", response.message);
 
     Ok(())
 }

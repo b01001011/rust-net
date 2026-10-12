@@ -3,6 +3,10 @@ name = "rust-net"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "rust_net"
+crate-type = ["lib", "staticlib"]
+
 [dependencies]
 prost = "0.14.4"
 rand = "0.10.2"
@@ -12,3 +16,4 @@ tonic-prost = "0.14.6"
 
 [build-dependencies]
 tonic-prost-build = "0.14.6"
+cbindgen = "0.29"

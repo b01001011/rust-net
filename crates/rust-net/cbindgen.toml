@@ -1,2 +1,3 @@
 language = "C"
 include_guard = "RUST_NET_H"
+cpp_compat = true

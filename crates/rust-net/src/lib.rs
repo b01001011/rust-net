@@ -1,3 +1,4 @@
+pub mod ffi;
 pub mod rendezvous;
 pub mod stun;
 

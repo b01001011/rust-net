@@ -6,5 +6,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     println!("Public address: {addr}");
 
+    let addr2 = discover_public_address().await?;
+    println!("Public address: {addr2}");
+    
     Ok(())
 }

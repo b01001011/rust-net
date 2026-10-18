@@ -11,3 +11,6 @@ rustc-ice-*.txt
 
 crates/rust-net/include
 
+.DS_Store
+tags
+

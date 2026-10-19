@@ -1,6 +1,10 @@
+#[cfg(feature = "log")]
+use crate::log::{info};
+
 use crate::discovery::{
-    error::{Result},
+    error::{e_fmt, Error, Result},
 };
+use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
 };
@@ -22,6 +26,18 @@ impl DiscoveryService {
     pub fn new_with_port(port: u16) -> Result<Self> {
         let signal_addr = SocketAddrV4::new(LOOPBACK_V4, 0);
         
+        let signal_sock = UdpSocket::bind(signal_addr)
+            .map_err(|e| e_fmt!("failed to create signal_sock for service: {}", e))?;
+
+        let signal_addr = signal_sock
+            .local_addr()
+            .map_err(|e| e_fmt!("failed to get singal sock addr: {}", e))?;
+
+        signal_sock.set_nonblocking(true)
+            .map_err(|e| e_fmt!("failed to set nonblocking for singal socket: {}", e))?;
+
+        let poller = Poll::new().map_err(|e| e_fmt!("failed to create mio Poll: {e}"))?;
+
         Ok(Self{})
     }
 }

@@ -5,6 +5,10 @@ publish = false
 edition = "2024"
 
 [[example]]
+name = "discovery"
+path = "discovery.rs"
+
+[[example]]
 name = "peer"
 path = "peer.rs"
 

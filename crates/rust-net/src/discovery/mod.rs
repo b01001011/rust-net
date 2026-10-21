@@ -1,5 +1,6 @@
 mod discovery_service;
 mod error;
+mod utils;
 
 pub use error::{Error, Result};
 

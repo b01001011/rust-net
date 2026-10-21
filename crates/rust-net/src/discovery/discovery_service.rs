@@ -1,8 +1,10 @@
 #[cfg(feature = "log")]
 use crate::log::{debug};
-
 use crate::discovery::{
     error::{e_fmt, Error, Result},
+};
+use crate::discovery::utils::{
+    local_interfaces,
 };
 use flume::{bounded, Receiver, Sender};
 use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token};
@@ -66,7 +68,7 @@ impl DiscoveryService {
         signal_addr: SocketAddr,
     ) {
         let mut zc = Zeroconf::new(signal_sock, poll, port, cmd_sender, signal_addr);
-
+        
         if let Some(cmd) = zc.run(receiver) {
             match cmd {
                 Command::Exit => {
@@ -92,6 +94,7 @@ impl Zeroconf {
         cmd_sender: Sender<Command>,
         signal_addr: SocketAddr,
     ) -> Self {
+        let interfaces = local_interfaces();
 
         Self{
             poll,

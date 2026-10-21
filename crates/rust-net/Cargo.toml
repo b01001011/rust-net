@@ -13,6 +13,7 @@ default = ["log"]
 
 [dependencies]
 flume = { version = "0.12.0", default-features = false, features = ["async"] }
+if-addrs = { version = "0.15.0", features = ["link-local"] }
 log = { version = "0.4.34", optional = true }
 mio = { version = "1.2.4", features = ["os-poll", "net"] }
 prost = "0.14.4"

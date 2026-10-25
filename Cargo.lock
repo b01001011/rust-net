@@ -834,6 +834,8 @@ dependencies = [
  "mio",
  "prost",
  "rand",
+ "socket-pktinfo",
+ "socket2",
  "tokio",
  "tonic",
  "tonic-prost",
@@ -932,6 +934,17 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+
+[[package]]
+name = "socket-pktinfo"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "612942246d0cc239cfd83af1dfd39be47f649208a3524e5e9da651910128e0ac"
+dependencies = [
+ "libc",
+ "socket2",
+ "windows-sys",
+]
 
 [[package]]
 name = "socket2"

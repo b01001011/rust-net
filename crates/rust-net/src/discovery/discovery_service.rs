@@ -1,17 +1,22 @@
 #[cfg(feature = "log")]
-use crate::log::{debug};
+use crate::log::{debug, trace};
 use crate::discovery::{
     error::{e_fmt, Error, Result},
 };
 use crate::discovery::utils::{
-    local_interfaces,
+    local_if_addrs,
 };
 use flume::{bounded, Receiver, Sender};
 use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token};
+use socket2::Domain;
+use socket_pktinfo::PktInfoUdpSocket;
 use std::{
+    collections::{HashMap},
+    io,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
     thread,
 };
+use crate::discovery::types::{LocalInterface, DnsRegistry};
 
 pub const MDNS_PORT: u16 = 5353;
 
@@ -81,7 +86,22 @@ impl DiscoveryService {
     }
 }
 
+struct CustomUdpSocket {
+    pktinfo: PktInfoUdpSocket,
+    mio: MioUdpSocket,
+}
+
+impl CustomUdpSocket {
+    pub fn new(pktinfo: PktInfoUdpSocket) -> io::Result<Self> {
+        let std_sock = pktinfo.try_clone_std()?;
+        let mio = MioUdpSocket::from_std(std_sock);
+        Ok(Self { pktinfo, mio })
+    }
+}
+
 struct Zeroconf {
+    dns_registry_map: HashMap<u32, DnsRegistry>,
+    intf_map: HashMap<u32, LocalInterface>,
     poll: Poll,
     port: u16,
 }
@@ -94,9 +114,19 @@ impl Zeroconf {
         cmd_sender: Sender<Command>,
         signal_addr: SocketAddr,
     ) -> Self {
-        let interfaces = local_interfaces();
+        let addrs = local_if_addrs();
+
+        let mut intf_map: HashMap<u32, LocalInterface> = HashMap::new();
+        let mut dns_registry_map: HashMap<u32, DnsRegistry> = HashMap::new();
+
+        let addr = SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port);
+        let ipv4_sock = new_multicast_socket(addr.into());
+
+        println!("{addr}");
 
         Self{
+            dns_registry_map,
+            intf_map,
             poll,
             port,
         }
@@ -120,5 +150,43 @@ pub enum DiscoveryEvent {
 pub enum ServiceStatus {
     Running, 
     Shutdown,
+}
+
+fn new_multicast_socket(addr: SocketAddr) -> Result<CustomUdpSocket> {
+    let sock = new_socket(addr, true)?;
+
+    let ttl_result = match addr {
+        SocketAddr::V4(_) => sock.set_multicast_ttl_v4(255),
+        SocketAddr::V6(_) => sock.set_multicast_hops_v6(255),
+    };
+
+    if let Err(e) = ttl_result {
+        debug!("failed to set multicast TTL on {addr}: {e}");
+    }
+
+    CustomUdpSocket::new(sock)
+        .map_err(|e| e_fmt!("failed to create CustomUdpSocket for {}: {}", addr, e)) 
+}
+
+fn new_socket(addr: SocketAddr, non_block: bool) -> Result<PktInfoUdpSocket> {
+    let domain = match addr {
+        SocketAddr::V4(_) => socket2::Domain::IPV4,
+        SocketAddr::V6(_) => socket2::Domain::IPV6,
+    };
+
+    let fd = PktInfoUdpSocket::new(domain).map_err(|e| e_fmt!("create socket failed: {}", e))?;
+
+    fd.set_reuse_address(true).map_err(|e| e_fmt!("set ReuseAddr failed: {}", e))?;
+
+    if non_block {
+        fd.set_nonblocking(true)
+            .map_err(|e| e_fmt!("set O_NONBLOCK: {}", e))?;
+    }
+
+    fd.bind(&addr.into())
+        .map_err(|e| e_fmt!("socket bind to {} failed: {}", &addr, e))?;
+
+    trace!("new socket bind to {}", &addr);
+    Ok(fd)
 }
 

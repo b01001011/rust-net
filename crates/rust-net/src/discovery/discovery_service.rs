@@ -1,11 +1,7 @@
 #[cfg(feature = "log")]
 use crate::log::{debug, trace};
-use crate::discovery::{
-    error::{e_fmt, Error, Result},
-};
-use crate::discovery::utils::{
-    local_if_addrs,
-};
+use crate::discovery::error::{e_fmt, Error, Result};
+use crate::discovery::utils::{local_if_addrs};
 use flume::{bounded, Receiver, Sender};
 use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token};
 use socket2::Domain;

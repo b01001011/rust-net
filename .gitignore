@@ -12,6 +12,6 @@ rustc-ice-*.txt
 crates/rust-net/include
 
 .DS_Store
-.swp
+*.swp
 tags
 

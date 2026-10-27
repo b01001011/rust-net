@@ -2,14 +2,17 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
+    Again,
     Msg(String),
+    ServiceShutdown,
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Again => write!(f, "try again"),
             Self::Msg(s) => write!(f, "{s}"),
-
+            Self::ServiceShutdown => write!(f, "service has shutdown"),
         }
     }
 }

@@ -2,14 +2,15 @@
 use crate::log::{debug, trace};
 use crate::discovery::error::{e_fmt, Error, Result};
 use crate::discovery::utils::{local_if_addrs};
-use flume::{bounded, Receiver, Sender};
-use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token};
+use flume::{bounded, Receiver, Sender, TrySendError};
+use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token, Waker};
 use socket2::Domain;
 use socket_pktinfo::PktInfoUdpSocket;
 use std::{
     collections::{HashMap},
     io,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
+    sync::Arc,
     thread,
 };
 use crate::discovery::types::{LocalInterface, DnsRegistry};
@@ -19,10 +20,13 @@ pub const MDNS_PORT: u16 = 5353;
 const GROUP_ADDR_V4: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const GROUP_ADDR_V6: Ipv6Addr = Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 0xfb);
 const LOOPBACK_V4: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+const EVENT_CHANNEL_CAPACITY: usize = 1000;
+
+const WAKER_EVENT_KEY: usize = usize::MAX - 1;
 
 pub struct DiscoveryService {
     sender: Sender<Command>,
-    signal_addr: SocketAddr,
+    waker: Arc<Waker>,
 }
 
 impl DiscoveryService {
@@ -31,44 +35,53 @@ impl DiscoveryService {
     }
 
     pub fn new_with_port(port: u16) -> Result<Self> {
-        let signal_addr = SocketAddrV4::new(LOOPBACK_V4, 0);
-        
-        let signal_sock = UdpSocket::bind(signal_addr)
-            .map_err(|e| e_fmt!("failed to create signal_sock for service: {}", e))?;
-
-        let signal_addr = signal_sock
-            .local_addr()
-            .map_err(|e| e_fmt!("failed to get singal sock addr: {}", e))?;
-
-        signal_sock.set_nonblocking(true)
-            .map_err(|e| e_fmt!("failed to set nonblocking for singal socket: {}", e))?;
-
         let poll = Poll::new().map_err(|e| e_fmt!("failed to create mio Poll: {e}"))?;
+        let waker = Arc::new(
+            Waker::new(poll.registry(), Token(WAKER_EVENT_KEY))
+                .map_err(|e| e_fmt!("failed to create mio Waker: {e}"))?,
+        );
         let (sender, receiver) = bounded(100);
-        let mio_sock = MioUdpSocket::from_std(signal_sock);
+        
+        let thread_waker = waker.clone();
         let cmd_sender = sender.clone();
+
         thread::Builder::new()
             .name("discovery_service".to_string())
             .spawn(move || {
-                Self::service_thread(mio_sock, poll, receiver, port, cmd_sender, signal_addr)
+                Self::service_thread(thread_waker, poll, receiver, port, cmd_sender)
             })
             .map_err(|e| e_fmt!("thread builder failed to spawn: {}", e))?;
         
         Ok(Self{
             sender,
-            signal_addr,
-        })
+            waker,
+       })
+    }
+
+    pub fn browse(&self, service_name: &str) -> Result<Receiver<DiscoveryEvent>> {
+        let (sender, receiver) = bounded(EVENT_CHANNEL_CAPACITY);
+        Ok(receiver)
+    }
+
+    fn send_cmd(&self, cmd: Command) -> Result<()> {
+        self.sender.try_send(cmd).map_err(|e| match e {
+            TrySendError::Full(_) => Error::Again,
+            TrySendError::Disconnected(_) => Error::ServiceShutdown,
+        })?;
+
+        self.waker.wake().map_err(|e| e_fmt!("failed to wake daemon: {e}"))?;
+        
+        Ok(())
     }
 
     fn service_thread(
-        signal_sock: MioUdpSocket,
+        waker: Arc<Waker>,
         poll: Poll,
         receiver: Receiver<Command>,
         port: u16, 
         cmd_sender: Sender<Command>,
-        signal_addr: SocketAddr,
     ) {
-        let mut zc = Zeroconf::new(signal_sock, poll, port, cmd_sender, signal_addr);
+        let mut zc = Zeroconf::new(waker, poll, port, cmd_sender);
         
         if let Some(cmd) = zc.run(receiver) {
             match cmd {
@@ -100,15 +113,15 @@ struct Zeroconf {
     intf_map: HashMap<u32, LocalInterface>,
     poll: Poll,
     port: u16,
+    waker: Arc<Waker>,
 }
 
 impl Zeroconf {
     fn new(
-        signal_sock: MioUdpSocket,
+        waker: Arc<Waker>,
         poll: Poll,
         port: u16, 
         cmd_sender: Sender<Command>,
-        signal_addr: SocketAddr,
     ) -> Self {
         let addrs = local_if_addrs();
 
@@ -125,6 +138,7 @@ impl Zeroconf {
             intf_map,
             poll,
             port,
+            waker,
         }
     }
 
@@ -139,6 +153,7 @@ enum Command {
     Exit,
 }
 
+#[derive(Debug)]
 pub enum DiscoveryEvent {
     SearchStarted(String),
 }

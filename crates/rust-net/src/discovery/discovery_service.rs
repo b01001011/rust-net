@@ -7,11 +7,13 @@ use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registr
 use socket2::Domain;
 use socket_pktinfo::PktInfoUdpSocket;
 use std::{
-    collections::{HashMap},
+    cmp::{Reverse},
+    collections::{BinaryHeap, HashMap},
     io,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
     sync::Arc,
     thread,
+    time::{Duration, Instant, SystemTime},
 };
 use crate::discovery::types::{LocalInterface, DnsRegistry};
 
@@ -55,11 +57,12 @@ impl DiscoveryService {
         Ok(Self{
             sender,
             waker,
-       })
+        })
     }
 
     pub fn browse(&self, service_name: &str) -> Result<Receiver<DiscoveryEvent>> {
         let (sender, receiver) = bounded(EVENT_CHANNEL_CAPACITY);
+        self.send_cmd(Command::Browse(service_name.to_string(), 1, false, sender))?;
         Ok(receiver)
     }
 
@@ -85,6 +88,7 @@ impl DiscoveryService {
         
         if let Some(cmd) = zc.run(receiver) {
             match cmd {
+                
                 Command::Exit => {
                 }
                 _ => {
@@ -113,6 +117,7 @@ struct Zeroconf {
     intf_map: HashMap<u32, LocalInterface>,
     poll: Poll,
     port: u16,
+    timers: BinaryHeap<Reverse<Instant>>,
     waker: Arc<Waker>,
 }
 
@@ -131,6 +136,8 @@ impl Zeroconf {
         let addr = SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port);
         let ipv4_sock = new_multicast_socket(addr.into());
 
+        let timers = BinaryHeap::new();
+
         println!("{addr}");
 
         Self{
@@ -138,12 +145,72 @@ impl Zeroconf {
             intf_map,
             poll,
             port,
+            timers,
             waker,
         }
     }
 
     fn run(&mut self, receiver: Receiver<Command>) -> Option<Command> {
+        let mut last_now = Instant::now();
+        let mut last_wall_now = SystemTime::now();
+
+        let mut events = mio::Events::with_capacity(1024);
+        loop {
+            events.clear();
+            match self.poll.poll(&mut events, None) {
+                Ok(_) => println!("OK"),
+                Err(e) => debug!("failed to select from sockets: {}", e),
+            }
+            
+            let now = Instant::now();
+            let wall_now = SystemTime::now();
+
+            if let Some(slept) = slept_duration(
+                now.saturating_duration_since(last_now),
+                wall_now.duration_since(last_wall_now).ok(),
+            ) {
+                debug!("system slept for aobut {:?}", slept);
+            }
+
+            last_now = now;
+            last_wall_now = wall_now;
+            
+            while let Ok(command) = receiver.try_recv() {
+                if matches!(command, Command::Exit) {
+                    debug!("exit command received. cleanup.");
+                    return Some(command);
+                }
+
+                println!("{:?}", command);
+                self.exec_command(command, false);
+            }
+            
+        }
         return None;
+    }
+
+    fn exec_command(&mut self, command: Command, repeating: bool) {
+        trace!("exec_command: {:?} repeating: {}", command, repeating);
+        match command {
+            Command::Browse(service_name, next_delay, cache_only, listener) => {
+                self.exec_command_browse(repeating, service_name, next_delay, cache_only, listener);       
+            }
+
+            _ => {
+                debug!("unexpected command: {:?}", command);
+            }
+        }
+    }
+
+    fn exec_command_browse(
+        &mut self,
+        repeating: bool, 
+        service_name: String, 
+        next_delay: u32, 
+        cache_only: bool,
+        listener: Sender<DiscoveryEvent>,
+    ) {
+
     }
 }
 
@@ -199,5 +266,10 @@ fn new_socket(addr: SocketAddr, non_block: bool) -> Result<PktInfoUdpSocket> {
 
     trace!("new socket bind to {}", &addr);
     Ok(fd)
+}
+
+fn slept_duration(instant_elapsed: Duration, wall_elapsed: Option<Duration>) -> Option<Duration> {
+    let gap = wall_elapsed?.checked_sub(instant_elapsed)?;
+    (gap > Duration::from_secs(2)).then_some(gap)
 }
 

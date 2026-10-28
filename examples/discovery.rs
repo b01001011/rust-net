@@ -9,7 +9,6 @@ fn main() {
 
     println!("Example: Discovery");
 
-    let service = DiscoveryService::new().expect("failed to create service");
     let action = match args.get(1) {
         Some(arg) => arg.as_str(),
         None => {

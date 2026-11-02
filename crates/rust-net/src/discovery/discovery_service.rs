@@ -1,7 +1,10 @@
 #[cfg(feature = "log")]
 use crate::log::{debug, trace};
+use crate::discovery::dns::{DnsPointer};
+use crate::discovery::dns_cache::{DnsCache};
 use crate::discovery::error::{e_fmt, Error, Result};
 use crate::discovery::utils::{local_if_addrs};
+use crate::discovery::types::{LocalInterface, DnsRegistry};
 use flume::{bounded, Receiver, Sender, TrySendError};
 use mio::{event::Source, net::UdpSocket as MioUdpSocket, Interest, Poll, Registry, Token, Waker};
 use socket2::Domain;
@@ -15,7 +18,6 @@ use std::{
     thread,
     time::{Duration, Instant, SystemTime},
 };
-use crate::discovery::types::{LocalInterface, DnsRegistry};
 
 pub const MDNS_PORT: u16 = 5353;
 
@@ -113,6 +115,8 @@ impl CustomUdpSocket {
 }
 
 struct Zeroconf {
+    cache: DnsCache,
+    discovery_queriers: HashMap<String, Sender<DiscoveryEvent>>,
     dns_registry_map: HashMap<u32, DnsRegistry>,
     intf_map: HashMap<u32, LocalInterface>,
     poll: Poll,
@@ -141,6 +145,8 @@ impl Zeroconf {
         println!("{addr}");
 
         Self{
+            cache: DnsCache::new(),
+            discovery_queriers: HashMap::new(),
             dns_registry_map,
             intf_map,
             poll,
@@ -184,7 +190,6 @@ impl Zeroconf {
                 println!("{:?}", command);
                 self.exec_command(command, false);
             }
-            
         }
         return None;
     }
@@ -210,7 +215,68 @@ impl Zeroconf {
         cache_only: bool,
         listener: Sender<DiscoveryEvent>,
     ) {
+        let pretty_addrs: Vec<String> = self
+            .intf_map
+            .iter()
+            .map(|(i, intf)| format!("{} ({i})", intf.name))
+            .collect();
 
+        let started = DiscoveryEvent::SearchStarted(format!(
+            "{service_name} on {} interface [{}]",
+            pretty_addrs.len(),
+            pretty_addrs.join(", ")
+        ));
+        
+        if !repeating {
+            if let Err(e) = listener.try_send(started) {
+                debug!(
+                    "failed to send SearchStarted({})(repeating:{}): {}", 
+                    service_name, repeating, e
+                );
+                return;
+            }
+            
+            self.discovery_queriers.insert(service_name.clone(), listener.clone());
+
+            let now = Instant::now();
+            self.query_cache_for_service(&service_name, &listener, now);
+            if !self.service_live(&service_name, &listener) {
+            }
+        }
+    }
+
+    fn query_cache_for_service(
+        &mut self,
+        service_name: &str,
+        sender: &Sender<DiscoveryEvent>, 
+        now: Instant,
+    ) {
+        let aliases: Vec<String> = self
+            .cache
+            .get_ptr(service_name)
+            .map(|records| {
+                records
+                    .iter()
+                    .filter(|r| !r.record.expires_soon(now))
+                    .filter_map(|r| {
+                        r.record
+                            .any()
+                            .downcast_ref::<DnsPointer>()
+                            .map(|p| p.alias().to_string())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        for alias in aliases {
+            
+        }
+    }
+
+    fn service_live(&self, service_name: &str, sender: &Sender<DiscoveryEvent>) -> bool {
+        self.discovery_queriers
+            .get(service_name)
+            .is_some_and(|s| s.same_channel(sender))
     }
 }
 

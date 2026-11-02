@@ -5,6 +5,8 @@ use rust_net::discovery::{
 use std::env;
 
 fn main() {
+    env_logger::builder().format_timestamp_millis().init();
+    
     let args: Vec<String> = env::args().collect();
 
     println!("Example: Discovery");

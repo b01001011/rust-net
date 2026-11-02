@@ -1,5 +1,7 @@
 mod discovery_info;
 mod discovery_service;
+mod dns;
+mod dns_cache;
 mod error;
 mod types;
 mod utils;
@@ -13,3 +15,4 @@ pub use discovery_service::{
 pub use discovery_info::{
     DiscoveryInfo,
 };
+

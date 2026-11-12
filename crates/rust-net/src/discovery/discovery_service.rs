@@ -114,6 +114,12 @@ impl CustomUdpSocket {
     }
 }
 
+struct Retransmission {
+    time: Instant, 
+    command: Command,
+}
+
+
 struct Zeroconf {
     cache: DnsCache,
     discovery_queriers: HashMap<String, Sender<DiscoveryEvent>>,
@@ -121,6 +127,7 @@ struct Zeroconf {
     intf_map: HashMap<u32, LocalInterface>,
     poll: Poll,
     port: u16,
+    retransmissions: Vec<Retransmission>,
     timers: BinaryHeap<Reverse<Instant>>,
     waker: Arc<Waker>,
 }
@@ -151,6 +158,7 @@ impl Zeroconf {
             intf_map,
             poll,
             port,
+            retransmissions: Vec::new(),
             timers,
             waker,
         }
@@ -241,6 +249,39 @@ impl Zeroconf {
             let now = Instant::now();
             self.query_cache_for_service(&service_name, &listener, now);
             if !self.service_live(&service_name, &listener) {
+                return;
+            }
+        } else {
+            if !self.service_live(&service_name, &listender) {
+                return;
+            }
+            self.push_service(&ty, started);
+            if !self.service_live(&ty, &listener) {
+                return;
+            }
+        }
+    }
+
+    fn clear_discovery_retransmissions(&mut self, service_name: &str) {
+        self.retransmissions.retain(|r| !matches!(&r.command, Command::Browse(s, _, _, _) if s == service_name));
+    }
+
+    fn push_service(&mut self, service_name: &str, event: DiscoveryEvent) {
+        let Some(sender) = self.discovery_queriers.get(service_name).cloned() else {
+            return;
+        };
+
+        match sender.try_send(event) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                debug!(
+                    "subscription closed: event channel full for service service_name {}",
+                    service_name,
+                );
+                self.remove_discovery_subscription(service_name);
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                self.remove_discovery_subscription(service_name);
             }
         }
     }
@@ -269,8 +310,17 @@ impl Zeroconf {
             .unwrap_or_default();
 
         for alias in aliases {
-            
+            //let resolved_event = match self.resolve_service_from_cache(service_name, &alias) {
+
+            //}
+            //self.push_service(service_name, 
         }
+    }
+
+    fn remove_discovery_subscription(&mut self, service_name: &str) -> Option<Sender<DiscoveryEvent>> {
+        let sender = self.discovery_queriers.remove(service_name);
+        self.clear_discovery_retransmissions(service_name);
+        sender
     }
 
     fn service_live(&self, service_name: &str, sender: &Sender<DiscoveryEvent>) -> bool {
